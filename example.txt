@@ -1,0 +1,4 @@
+push static 1
+pop local 5
+add
+neg
