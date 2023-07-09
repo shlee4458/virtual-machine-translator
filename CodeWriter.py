@@ -19,22 +19,55 @@ command type 2: Arithmetic/Logical
 
 import os
 
-ARITHMETIC = {"add", "sub", "neg", "eq", "gt", "lt", "and", "or", "not"}
+# neg and not takes single value -> pop a single time
+ARITHMETIC = {"add": "M=M+D", "sub": "M=M-D", "neg": "M=-M",\
+              "eq": "D;JEQ", "gt": "D;JGT", "lt": "D;JLT",\
+                "and": "M=M&D", "or": "M=M|D", "not": "M=!M"}
+
 REGISTER_MAPPING = {"constant": "SP", "argument" : "ARG", "local": "LCL",\
                     "pointer": ["THIS", "THAT"]}
 
 class CodeWriter:
-    def __init__(self, filename: str) -> None:
+    def __init__(self, path: str) -> None:
         # initiate file to write on
-        destFileName = filename.split('/')[-1].split('.')[0]
-        destFileName = destFileName + ".asm" # TODO: change extension
-        destPath = os.path.join(os.getcwd(), "test", destFileName)
-        self.file = open(destPath, "w")
+        destPath = self.processPath(path)
+        self.file = open(destPath, "w+")
+
+        # write the bootstrap asm at the start of the translation
+        self.writeInit()
+        
+
+    def processPath(self, path):
+        destPathName = path.split('/')[-1].split('.')[0]
+        destPathName = destPathName + ".asm"
+        destPath = os.path.join(os.getcwd(), "output", destPathName)
+        return destPath
 
     def writeArithmetic(self, command):
-        # pop two and execute the arithmetic operation
-        # TODO
-        pass
+        # get the value at the top of the stack to the D register
+        if command not in ["neg", "not"]:
+            self.file.write("@SP\nM=M-1\nA=M\nD=M\n") # pop the stack value to D
+        self.moveSP(False) # SP--
+        self.file.write('@SP\nA=M\n') # set A register to the SP value
+        
+        # if not a bool operator
+        if command not in ["eq", "gt", "lt"]:
+            self.file.write(ARITHMETIC[command[0]])
+        else:
+            # compare the two
+            self.file.write("D=M-D")
+            self.file.write(ARITHMETIC[command[0]])
+
+        # SP++
+        self.moveSP(True)
+
+    def writeInit(self):
+        # set stack pointer to 256
+        self.file.write('@256\nD=A')
+        self.file.write('@SP\nM=D')
+
+        # call sys.init
+        self.writeCall("Sys.init", 0)
 
     def writePushPop(self, command):
         '''
@@ -106,13 +139,26 @@ class CodeWriter:
         direction = "+1" if add else "-1"
         self.file.write(f"@SP\nM=M{direction}\n")
 
+    def writeLabel(self, label):
+        self.file.write(f"({label})")
 
+    def writeGoto(self, label):
+        self.file.write(f"@{label}\n0;JMP\n")
+
+    def writeIf(self, label):
+        self.file.write()
+
+    def writeCall(self, functionName: str, numArgs: int):
+        pass
+    
+    def writeReturn(self, ):
+        pass
+
+    def writeFunction(self, functionName: str, numLocals: int):
+        pass
+    
     def close(self):
         self.file.close()
-
-
-    
-
 
 """
 ################### Main Implementation ########################

@@ -1,2 +1,0 @@
-push local 1
-pop local 5
