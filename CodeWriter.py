@@ -46,21 +46,26 @@ class CodeWriter:
 
     def writeArithmetic(self, command):
         # get the value at the top of the stack to the D register
+        assembly = []
         if command not in ["neg", "not"]:
-            self.file.write("@SP\nM=M-1\nA=M\nD=M\n") # pop the stack value to D
-        self.moveSP(False) # SP--
-        self.file.write('@SP\nA=M\n') # set A register to the SP value
+            assembly += self.stack_to_d()
+        assembly += ['@SP', 'A=M'] # set A register to the SP value
         
         # if not a bool operator
         if command not in ["eq", "gt", "lt"]:
-            self.file.write(ARITHMETIC[command[0]])
+            assembly += str(ARITHMETIC[command[0]])
         else:
             # compare the two
-            self.file.write("D=M-D")
-            self.file.write(ARITHMETIC[command[0]])
+            assembly += self.stack_to_d()
+            assembly += ['@SP', 'AM=M-1', 'D=D-M'] # subtract to the previous stack
+            assembly += [f'@BOOL{self.fcount}', str(ARITHMETIC[command[0]]), 'D=0'] # if true set D to -1 else 0
+            assembly += [f'@FINAL{self.fcount}', '0;JEQ']
+            assembly += [f'(EQUAL{self.fcount})', 'D=-1']
+            assembly += [f'(FINAL{self.fcount})', '@SP', 'A=M', 'M=D']
+            self.fcount += 1
 
-        # SP++
-        self.moveSP(True)
+        assembly += self.stackPlus() # SP++
+        self.combineAndWrite(assembly)            
 
     def writeInit(self):
         assembly = []
@@ -285,77 +290,3 @@ class CodeWriter:
 
     def close(self):
         self.file.close()
-
-"""
-################### Main Implementation ########################
-push:
-RAM[SPpointer] = val
-SP++
-
-    1)
-    ######### push to the sp #########
-    @num
-    D=A
-
-    2)
-    (
-    # get the num in the pointer
-    @LCL
-    A=D+M
-    D=M
-    )
-
-    3)
-    @SP
-    M=D
-
-    4)
-    move SP up
-    
-pop:
-SP--
-val = RAM[SPpointer]
-
-    1)
-    SP--
-
-    2)
-    # get the value from SP and save it to R13
-    @SP
-    A=M
-    D=M
-
-    @R13
-    M=D
-
-    3)
-    # get the address of LCL + num and save it R14
-    @num
-    D=A
-
-    @LCL
-    A=D+M
-    D=A
-    
-    @R14
-    M=D
-
-    4)
-    # get the r13 value
-    @R13
-    D=M
-
-    5)
-    # save the r13 value to the address
-    @R14
-    A=M
-    M=D
-
-
-
-
-arith:
-    pop operation at the current stack
-    pop operation at the current stack
-    push pop1 (sth:arith) pop2
-"""
