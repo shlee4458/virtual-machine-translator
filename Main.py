@@ -52,11 +52,14 @@ class Main:
 
                 # call respective function to write in the output file
                 if parser.commandType() == "C_ARITHMETIC":
-                    print()
                     self.writer.writeArithmetic(command)
                 
-                elif parser.commandType() == "C_PUSH" or parser.commandType() == "C_POP":
+                elif parser.commandType() in ["C_PUSH", "C_POP"]:
                     self.writer.writePushPop(command)
+                elif parser.commandType() in ["C_GOTO", "C_IF", "C_LABEL"]:
+                    self.writer.writeBranch(command)
+                elif parser.commandType() in ["C_RETURN", "C_CALL", "C_FUNCTION"]:
+                    self.writer.writeFunc(command)
 
 if __name__ == "__main__":
     Main()

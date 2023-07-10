@@ -2,3 +2,6 @@ push local 1
 push temp 2
 push constant 3
 pop local 3
+label func1
+function mult 3
+call mult 3

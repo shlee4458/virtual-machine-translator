@@ -3,6 +3,10 @@ COMMAND_TYPE = {
         'function': 'C_FUNCTION', 'return': 'C_RETURN', 'call': 'C_CALL'
 }
 
+ARITHMETIC_TYPE = {
+    'add', 'sub', 'neg', 'eq', 'gt', 'lt', 'and', 'or', 'not'
+}       
+
 class VMParser:
 
     def __init__(self, filename) -> None:
@@ -55,10 +59,14 @@ class VMParser:
         if not self.command:
             return ""
         
-        if self.command[0] in COMMAND_TYPE:
+        elif self.command[0] in COMMAND_TYPE:
             return COMMAND_TYPE[self.command[0]]
-    
-        return "C_ARITHMETIC"
+        
+        elif self.command[0] in ARITHMETIC_TYPE:
+            return "C_ARITHMETIC"
+        
+        else:
+            return "C_LABEL"
     
     def getCommand(self):
         return self.command
