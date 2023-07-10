@@ -1,4 +1,10 @@
+COMMAND_TYPE = {
+    'push': 'C_PUSH', 'pop' : 'C_POP', 'goto': 'C_GOTO', 'if-goto': 'C_IF',\
+        'function': 'C_FUNCTION', 'return': 'C_RETURN', 'call': 'C_CALL'
+}
+
 class VMParser:
+
     def __init__(self, filename) -> None:
         '''
         Opens the input file/stream and gets ready to parse it
@@ -49,38 +55,10 @@ class VMParser:
         if not self.command:
             return ""
         
-        if len(self.command) == 1:
-            return "C_ARITHMETIC"
+        if self.command[0] in COMMAND_TYPE:
+            return COMMAND_TYPE[self.command[0]]
     
-        if self.command[0] == 'push':
-            return "C_PUSH"
-    
-        if self.command[0] == 'pop':
-            return "C_POP"
-
-        # TODO:
-            # C_LABEL, C_GOTO, C_IF, C_FUNCTION, C_RETURN, C_CALL,
-
-    def arg1(self):
-        '''
-        Returns the first argument of the current command.
-        In case of the C_ARTHMETIC, the command itself is returned.
-        Should not be called if the current command is C_RETURN
-        '''
-        if len(self.command) <= 1:
-            return self.command
-        return self.command[1]
-
-    def arg2(self):
-        '''
-        Returns the first argument of the current command.
-        In case of the C_ARTHMETIC, the command itself is returned.
-        Should be called only if the current command is;
-            C_PUSH, C_POP, C_FUNCTION, or C_CALL
-        '''
-        if len(self.command) <= 1:
-            return self.command
-        return self.command[2]
+        return "C_ARITHMETIC"
     
     def getCommand(self):
         return self.command

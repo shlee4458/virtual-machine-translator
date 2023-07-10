@@ -25,22 +25,23 @@ ARITHMETIC = {"add": "M=M+D", "sub": "M=M-D", "neg": "M=-M",\
                 "and": "M=M&D", "or": "M=M|D", "not": "M=!M"}
 
 REGISTER_MAPPING = {"constant": "SP", "argument" : "ARG", "local": "LCL",\
-                    "pointer": ["THIS", "THAT"]}
+                    "pointer": ["THIS", "THAT"], "temp": "5"}
 
 class CodeWriter:
     def __init__(self, path: str) -> None:
         # initiate file to write on
         destPath = self.processPath(path)
-        self.file = open(destPath, "w+")
+        self.file = open(destPath, "w")
+        self.fcount = 0
 
         # write the bootstrap asm at the start of the translation
         self.writeInit()
-        
 
     def processPath(self, path):
+        # process input path and returns the destination path
         destPathName = path.split('/')[-1].split('.')[0]
-        destPathName = destPathName + ".asm"
-        destPath = os.path.join(os.getcwd(), "output", destPathName)
+        self.destPathName = destPathName + ".asm"
+        destPath = os.path.join(os.getcwd(), "output", self.destPathName)
         return destPath
 
     def writeArithmetic(self, command):
@@ -63,8 +64,8 @@ class CodeWriter:
 
     def writeInit(self):
         # set stack pointer to 256
-        self.file.write('@256\nD=A')
-        self.file.write('@SP\nM=D')
+        self.file.write('@256\nD=A\n')
+        self.file.write('@SP\nM=D\n')
 
         # call sys.init
         self.writeCall("Sys.init", 0)
@@ -77,9 +78,6 @@ class CodeWriter:
         # set the variables from the command
         cType, arg1, arg2 = command
 
-        if arg1 == "pointer":
-            arg1, arg2 = REGISTER_MAPPING[arg1][arg2], 0
-
         if cType == "push":
             self.writePush(arg1, arg2)
         
@@ -88,56 +86,89 @@ class CodeWriter:
 
     def writePush(self, arg1, arg2):
         '''
-        Write pop command given arg1 and arg2 to the file.
+        Write push command given arg1 and arg2 to the file.
         '''
+        assembly = []
 
-        # store the arg2 to the D register
-        self.file.write(f"@{arg2}\nD=A\n")
+        # update the offset for pointer and static
+        if arg1 == "pointer":
+            arg2 = "THIS" if not arg2 else "THAT"
 
-        if arg1 != "constant":
-            base = REGISTER_MAPPING[arg1] # get the base pointer for the arg1
-            self.file.write(f"@{base}\nA=D+M\nD=M\n")
+        if arg1 == 'static':
+            arg2 = f"{self.destPathName}.{arg2}"
 
-        # store in the current sp
-        self.file.write("@SP\nM=D\n")
-    
-        # move the sp up
-        self.moveSP(True)
-        self.file.write("\n")
+        # 1) get the value from the specified memory
+        assembly += self.from_addr_to_d(arg1, arg2)
+
+        # 2) store that in the current SP
+        assembly += self.d_to_stack()
+
+        # 3) move the pointer up
+        assembly += self.stackPlus()
+
+        res = "\n".join(assembly) + '\n\n'
+        self.file.write(res)
 
     def writePop(self, arg1, arg2):
         '''
         Write pop command given arg1 and arg2 to the file.
         '''
+        assembly = []
 
-        # move the sp down
-        self.moveSP(False)
+        # 1) get the adress to store the arg2 to, and store the address to R13
+        if arg1 not in ['pointer', 'static']:
+            assembly += self.from_addr_to_d(arg1, arg2)
+            assembly += ['@R13', 'M=D']
 
-        # get the value from sp and save it to the R13
-        self.file.write(f"@SP\nA=M\nD=M\n")
-        self.file.write(f"@R13\nM=D\n")
+        # 2) get the stack value to D and move the SP--
+        assembly += self.stack_to_d()
 
-        # get the address of the pointer to store the value at, and store it to R14
-        base = REGISTER_MAPPING[arg1]
+        # 3) store value in d to m at the target address
+        assembly += self.d_to_m(arg1, arg2)
 
-        self.file.write(f"@{arg2}\nD=A\n")
-        self.file.write(f"{base}\nA=D+M\nD=A\n")
-        self.file.write(f"@R14\nM=D\n")
+        res = "\n".join(assembly) + '\n\n'
+        self.file.write(res)
 
-        # retrieve R13 value
-        self.file.write("@R13\nD=M\n")
+    def d_to_stack(self):
+        return ["@SP", "A=M", "M=D"]
+    
+    def stack_to_d(self):
+        return ["@SP", 'AM=M-1', 'D=M']
 
-        # save R13 value to the address
-        self.file.write("@R14\nA=M\nM=D\n")
-        self.file.write("\n")
+    def d_to_m(self, arg1, arg2):
+        res = []
+        if arg1 == "pointer":
+            res += [f'@{arg2}']
+        elif arg1 == 'static':
+            res += [f'@{self.destPathName}.{arg2}']
+        else:
+            res += ['@R13', 'A=M']
 
-    def moveSP(self, add):
+        res += ['M=D']
+        return res
+
+    def from_addr_to_d(self, arg1, arg2):
         '''
-        Writes to the file to move stack pointer
-        add bool: true if move the pointer forward(add), else false
+        Get the value stored in the address(optionally, address + offset) to D register
+        arg1: address
+        arg2: offset
         '''
-        direction = "+1" if add else "-1"
-        self.file.write(f"@SP\nM=M{direction}\n")
+        
+        A_or_M = "A" if arg1 in ["constant", "temp"] else "M"
+        res = [f"@{arg2}", f"D={A_or_M}"]
+        if arg1 in ['pointer', 'static', 'constant']:
+            return res
+        
+        # use value stored in A or M as an offset and retrieve value from the arg1
+            # temp(A) or the rest(M)
+        res.extend([f'@{REGISTER_MAPPING[arg1]}', f'A=D+{A_or_M}', 'D=M'])
+        return res
+
+    def stackPlus(self):
+        return ["@SP", "M=M+1"]
+
+    def combine(self, assembly: list):
+        pass
 
     def writeLabel(self, label):
         self.file.write(f"({label})")

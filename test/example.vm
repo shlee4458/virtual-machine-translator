@@ -1,5 +1,4 @@
 push local 1
-pop local 5
-push constant 1
-push constant 2
-add
+push temp 2
+push constant 3
+pop local 3
